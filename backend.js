@@ -10,7 +10,8 @@ app.use(express.json({ limit: "1mb" }));
 
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGIN || "*",
+    origin: process.env.ALLOWED_ORIGIN,
+    credentials: true,
   }),
 );
 
