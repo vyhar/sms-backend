@@ -11,7 +11,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use(
   cors({
     origin: process.env.ALLOWED_ORIGIN || "*",
-  })
+  }),
 );
 
 const PORT = process.env.PORT || 3000;
@@ -48,7 +48,9 @@ async function getRingCentralToken() {
   const data = await res.json();
 
   if (!res.ok || !data.access_token) {
-    throw new Error(data.message || data.error_description || "RingCentral auth failed");
+    throw new Error(
+      data.message || data.error_description || "RingCentral auth failed",
+    );
   }
 
   return data.access_token;
@@ -75,7 +77,7 @@ app.get("/phone-numbers", async (req, res) => {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     );
 
     const data = await rcRes.json();
@@ -97,7 +99,7 @@ app.get("/phone-numbers", async (req, res) => {
   }
 });
 
-app.post("/send-sms", async (req, res) => {
+app.post("/sms", async (req, res) => {
   try {
     const { from, to, text } = req.body;
 
@@ -137,7 +139,7 @@ app.post("/send-sms", async (req, res) => {
             to: [{ phoneNumber }],
             text,
           }),
-        }
+        },
       );
 
       const data = await rcRes.json();
@@ -168,7 +170,7 @@ app.get("/inbox", async (req, res) => {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     );
 
     const data = await rcRes.json();
