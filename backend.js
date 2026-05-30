@@ -187,7 +187,9 @@ app.get("/inbox", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 app.listen(PORT, () => {
   console.log(`SignalSend backend running on port ${PORT}`);
 });
