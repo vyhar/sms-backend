@@ -16,7 +16,25 @@ app.use(
 );
 
 const PORT = process.env.PORT || 3000;
+const { Pool } = require("pg");
 
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
+async function initializeDatabase() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspace_state (
+      workspace_id TEXT PRIMARY KEY,
+      state JSONB NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  console.log("Database ready");
+}
 function ringCentralBaseUrl() {
   return process.env.RC_ENV === "sandbox"
     ? "https://platform.devtest.ringcentral.com"
@@ -56,7 +74,120 @@ async function getRingCentralToken() {
 
   return data.access_token;
 }
+app.get("/sync/:workspace", async (req, res) => {
+  try {
+    const { workspace } = req.params;
 
+    const result = await pool.query(
+      `
+      SELECT state
+      FROM workspace_state
+      WHERE workspace_id = $1
+      `,
+      [workspace],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: "Workspace not found",
+      });
+    }
+
+    res.json({
+      state: result.rows[0].state,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+app.put("/sync/:workspace", async (req, res) => {
+  try {
+    const { workspace } = req.params;
+    const { state } = req.body;
+
+    if (!state) {
+      return res.status(400).json({
+        error: "Missing state",
+      });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO workspace_state
+      (
+        workspace_id,
+        state,
+        updated_at
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        NOW()
+      )
+      ON CONFLICT (workspace_id)
+      DO UPDATE SET
+        state = EXCLUDED.state,
+        updated_at = NOW()
+      `,
+      [workspace, state],
+    );
+
+    res.json({
+      success: true,
+      state,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+app.post("/sync/:workspace", async (req, res) => {
+  try {
+    const { workspace } = req.params;
+    const { state } = req.body;
+
+    await pool.query(
+      `
+      INSERT INTO workspace_state
+      (
+        workspace_id,
+        state,
+        updated_at
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        NOW()
+      )
+      ON CONFLICT (workspace_id)
+      DO UPDATE SET
+        state = EXCLUDED.state,
+        updated_at = NOW()
+      `,
+      [workspace, state],
+    );
+
+    res.json({
+      success: true,
+      state,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
 app.get("/", (req, res) => {
   res.json({
     ok: true,
@@ -190,6 +321,16 @@ app.get("/inbox", async (req, res) => {
 app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
+initializeDatabase()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Listening on ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 app.listen(PORT, () => {
   console.log(`SignalSend backend running on port ${PORT}`);
 });
