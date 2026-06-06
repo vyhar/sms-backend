@@ -330,6 +330,3 @@ initializeDatabase()
     console.error(err);
     process.exit(1);
   });
-app.listen(PORT, () => {
-  console.log(`SignalSend backend running on port ${PORT}`);
-});
