@@ -224,7 +224,9 @@ app.get("/phone-numbers", async (req, res) => {
         label: record.label || "",
       }));
 
-    res.json({ numbers });
+    res.json({
+      phoneNumbers: numbers,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -295,8 +297,17 @@ app.get("/inbox", async (req, res) => {
   try {
     const token = await getRingCentralToken();
 
+    const params = new URLSearchParams();
+
+    params.set("messageType", "SMS");
+    params.set("perPage", req.query.perPage || "100");
+
+    if (req.query.dateFrom) {
+      params.set("dateFrom", req.query.dateFrom);
+    }
+
     const rcRes = await fetch(
-      `${ringCentralBaseUrl()}/restapi/v1.0/account/~/extension/~/message-store?messageType=SMS&direction=Inbound&perPage=50`,
+      `${ringCentralBaseUrl()}/restapi/v1.0/account/~/extension/~/message-store?${params.toString()}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -314,11 +325,12 @@ app.get("/inbox", async (req, res) => {
       records: data.records || [],
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
   }
-});
-app.get("/health", (req, res) => {
-  res.json({ ok: true });
 });
 initializeDatabase()
   .then(() => {
