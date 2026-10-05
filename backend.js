@@ -202,61 +202,37 @@ app.get("/phone-numbers", async (req, res) => {
   try {
     const token = await getRingCentralToken();
 
-    let page = 1;
-    let totalPages = 1;
-    const smsNumbers = [];
-
-    do {
-      const rcRes = await fetch(
-        `${ringCentralBaseUrl()}/restapi/v1.0/account/~/phone-number?perPage=100&page=${page}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+    const rcRes = await fetch(
+      `${ringCentralBaseUrl()}/restapi/v1.0/account/~/phone-number?perPage=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
-
-      const data = await rcRes.json();
-
-      if (!rcRes.ok) {
-        console.error("RingCentral phone number error:", data);
-
-        return res.status(rcRes.status).json({
-          error: "Unable to retrieve RingCentral phone numbers",
-          details: data,
-        });
       }
+    );
 
-      const capableNumbers = (data.records || [])
-        .filter((record) =>
-          record.features?.includes("SmsSender")
-        )
-        .map((record) => ({
-          phoneNumber: record.phoneNumber,
-          label: record.label || "",
+    const data = await rcRes.json();
 
-          extensionId: record.extension?.id || null,
-          extensionNumber: record.extension?.extensionNumber || null,
-          extensionName: record.extension?.name || null,
-
-          usageType: record.usageType || null,
-          type: record.type || null,
-
-          features: record.features || [],
-        }));
-
-      smsNumbers.push(...capableNumbers);
-
-      totalPages = data.paging?.totalPages || 1;
-      page++;
-    } while (page <= totalPages);
+    if (!rcRes.ok) {
+      return res.status(rcRes.status).json({
+        error: "Unable to retrieve RingCentral phone numbers",
+        details: data,
+      });
+    }
 
     res.json({
-      count: smsNumbers.length,
-      phoneNumbers: smsNumbers,
+      totalReturned: data.records?.length || 0,
+      records: (data.records || []).map((record) => ({
+        phoneNumber: record.phoneNumber,
+        extension: record.extension || null,
+        usageType: record.usageType || null,
+        type: record.type || null,
+        features: record.features || null,
+      })),
     });
+
   } catch (err) {
-    console.error("Phone numbers error:", err);
+    console.error(err);
 
     res.status(500).json({
       error: "Failed to retrieve phone numbers",
