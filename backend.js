@@ -200,35 +200,72 @@ app.get("/health", (req, res) => {
 
 app.get("/phone-numbers", async (req, res) => {
   try {
-    const token = await getRingCentralToken();
+    const accessToken = await getAccessToken();
 
-    const rcRes = await fetch(
-      `${ringCentralBaseUrl()}/restapi/v1.0/account/~/extension/~/phone-number`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    );
+    let page = 1;
+    let totalPages = 1;
+    const smsNumbers = [];
 
-    const data = await rcRes.json();
+    do {
+      const response = await fetch(
+        `https://platform.ringcentral.com/restapi/v1.0/account/~/phone-number?perPage=100&page=${page}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    if (!rcRes.ok) {
-      return res.status(rcRes.status).json(data);
-    }
+      const data = await response.json();
 
-    const numbers = (data.records || [])
-      .filter((record) => record.features?.includes("SmsSender"))
-      .map((record) => ({
-        phoneNumber: record.phoneNumber,
-        label: record.label || "",
-      }));
+      if (!response.ok) {
+        console.error("RingCentral phone number error:", data);
+
+        return res.status(response.status).json({
+          error: "Unable to retrieve RingCentral phone numbers",
+          details: data,
+        });
+      }
+
+      const capableNumbers = (data.records || [])
+        .filter((record) =>
+          record.features?.includes("SmsSender")
+        )
+        .map((record) => ({
+          id: record.id,
+          phoneNumber: record.phoneNumber,
+
+          extensionId: record.extension?.id || null,
+          extensionNumber: record.extension?.extensionNumber || null,
+          extensionName: record.extension?.name || null,
+
+          usageType: record.usageType || null,
+          type: record.type || null,
+
+          features: record.features || [],
+        }));
+
+      smsNumbers.push(...capableNumbers);
+
+      totalPages = data.paging?.totalPages || 1;
+      page++;
+
+    } while (page <= totalPages);
 
     res.json({
-      phoneNumbers: numbers,
+      count: smsNumbers.length,
+      phoneNumbers: smsNumbers,
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+
+  } catch (error) {
+    console.error("Phone numbers error:", error);
+
+    res.status(500).json({
+      error: "Failed to retrieve phone numbers",
+      details: error.message,
+    });
   }
 });
 
@@ -341,4 +378,4 @@ initializeDatabase()
   .catch((err) => {
     console.error(err);
     process.exit(1);
-  });
+  }); 
