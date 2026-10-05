@@ -263,7 +263,7 @@ app.get("/phone-numbers", async (req, res) => {
       details: err.message,
     });
   }
-});s
+});
 
 app.get("/inbox", async (req, res) => {
   try {
