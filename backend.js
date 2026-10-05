@@ -200,30 +200,28 @@ app.get("/health", (req, res) => {
 
 app.get("/phone-numbers", async (req, res) => {
   try {
-    const accessToken = await getAccessToken();
+    const token = await getRingCentralToken();
 
     let page = 1;
     let totalPages = 1;
     const smsNumbers = [];
 
     do {
-      const response = await fetch(
-        `https://platform.ringcentral.com/restapi/v1.0/account/~/phone-number?perPage=100&page=${page}`,
+      const rcRes = await fetch(
+        `${ringCentralBaseUrl()}/restapi/v1.0/account/~/phone-number?perPage=100&page=${page}`,
         {
-          method: "GET",
           headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
-      const data = await response.json();
+      const data = await rcRes.json();
 
-      if (!response.ok) {
+      if (!rcRes.ok) {
         console.error("RingCentral phone number error:", data);
 
-        return res.status(response.status).json({
+        return res.status(rcRes.status).json({
           error: "Unable to retrieve RingCentral phone numbers",
           details: data,
         });
@@ -234,8 +232,8 @@ app.get("/phone-numbers", async (req, res) => {
           record.features?.includes("SmsSender")
         )
         .map((record) => ({
-          id: record.id,
           phoneNumber: record.phoneNumber,
+          label: record.label || "",
 
           extensionId: record.extension?.id || null,
           extensionNumber: record.extension?.extensionNumber || null,
@@ -251,84 +249,21 @@ app.get("/phone-numbers", async (req, res) => {
 
       totalPages = data.paging?.totalPages || 1;
       page++;
-
     } while (page <= totalPages);
 
     res.json({
       count: smsNumbers.length,
       phoneNumbers: smsNumbers,
     });
-
-  } catch (error) {
-    console.error("Phone numbers error:", error);
+  } catch (err) {
+    console.error("Phone numbers error:", err);
 
     res.status(500).json({
       error: "Failed to retrieve phone numbers",
-      details: error.message,
+      details: err.message,
     });
   }
-});
-
-app.post("/sms", async (req, res) => {
-  try {
-    const { from, to, text } = req.body;
-
-    if (!from || !to || !text) {
-      return res.status(400).json({
-        error: "Missing required fields: from, to, text",
-      });
-    }
-
-    if (!Array.isArray(to) || to.length === 0) {
-      return res.status(400).json({
-        error: "to must be a non-empty array of phone numbers",
-      });
-    }
-
-    if (text.length > 1000) {
-      return res.status(400).json({
-        error: "Message is too long",
-      });
-    }
-
-    const token = await getRingCentralToken();
-
-    const results = [];
-
-    for (const phoneNumber of to) {
-      const rcRes = await fetch(
-        `${ringCentralBaseUrl()}/restapi/v1.0/account/~/extension/~/sms`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: { phoneNumber: from },
-            to: [{ phoneNumber }],
-            text,
-          }),
-        },
-      );
-
-      const data = await rcRes.json();
-
-      results.push({
-        phoneNumber,
-        ok: rcRes.ok,
-        status: rcRes.status,
-        data,
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-
-    res.json({ results });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+});s
 
 app.get("/inbox", async (req, res) => {
   try {
