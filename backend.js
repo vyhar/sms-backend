@@ -280,17 +280,75 @@ app.get("/inbox", async (req, res) => {
     });
   }
 });
-initializeDatabase()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Listening on ${PORT}`);
+app.post("/sms", async (req, res) => {
+  try {
+    const token = await getRingCentralToken();
+
+    const { to, text } = req.body;
+
+    const from = "+18643053717";
+
+    if (!to || !text) {
+      return res.status(400).json({
+        error: "Missing recipient or message text",
+      });
+    }
+
+    const recipients = Array.isArray(to) ? to : [to];
+
+    const results = [];
+
+    for (const phoneNumber of recipients) {
+      const rcRes = await fetch(
+        `${ringCentralBaseUrl()}/restapi/v1.0/account/~/extension/~/sms`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: {
+              phoneNumber: from,
+            },
+            to: [
+              {
+                phoneNumber,
+              },
+            ],
+            text,
+          }),
+        }
+      );
+
+      const data = await rcRes.json().catch(() => ({}));
+
+      if (!rcRes.ok) {
+        return res.status(rcRes.status).json({
+          error: "RingCentral SMS send failed",
+          details: data,
+        });
+      }
+
+      results.push(data);
+    }
+
+    res.json({
+      success: true,
+      from,
+      results,
     });
-  })
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  }); 
-  app.get("/sms-senders", async (req, res) => {
+
+  } catch (err) {
+    console.error("SMS send error:", err);
+
+    res.status(500).json({
+      error: "Failed to send SMS",
+      details: err.message,
+    });
+  }
+});
+app.get("/sms-senders", async (req, res) => {
   try {
     const token = await getRingCentralToken();
 
@@ -339,3 +397,13 @@ initializeDatabase()
     });
   }
 });
+initializeDatabase()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Listening on ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  }); 
