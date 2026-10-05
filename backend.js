@@ -290,3 +290,52 @@ initializeDatabase()
     console.error(err);
     process.exit(1);
   }); 
+  app.get("/sms-senders", async (req, res) => {
+  try {
+    const token = await getRingCentralToken();
+
+    const rcRes = await fetch(
+      `${ringCentralBaseUrl()}/restapi/v1.0/account/~/extension/~/phone-number`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await rcRes.json();
+
+    if (!rcRes.ok) {
+      return res.status(rcRes.status).json({
+        error: "Unable to retrieve SMS sender numbers",
+        details: data,
+      });
+    }
+
+    const numbers = (data.records || []).map((record) => ({
+      phoneNumber: record.phoneNumber,
+      usageType: record.usageType,
+      type: record.type,
+      features: record.features || [],
+      smsSender: record.features?.includes("SmsSender") || false,
+      a2pSmsSender: record.features?.includes("A2PSmsSender") || false,
+    }));
+
+    const smsNumbers = numbers.filter(
+      (number) => number.smsSender || number.a2pSmsSender
+    );
+
+    res.json({
+      authenticatedExtensionNumbers: numbers,
+      smsCapableNumbers: smsNumbers,
+    });
+
+  } catch (err) {
+    console.error("SMS sender lookup error:", err);
+
+    res.status(500).json({
+      error: "Failed to retrieve SMS sender numbers",
+      details: err.message,
+    });
+  }
+});
